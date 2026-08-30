@@ -18,13 +18,6 @@ type
 
 proc `=copy`*(dst: var Utf8Validator, src: Utf8Validator) {.error.}
 
-# Usage:
-# var utf8: Utf8Validator
-# while stream.readable():
-#   let c = stream.read()
-#   utf8.push(c)
-# echo utf8.isValid()
-
 template isContinuation(b: uint8): uint8 =
   uint8(b >= 0x80'u8) and uint8(b < 0xC0'u8)
 
