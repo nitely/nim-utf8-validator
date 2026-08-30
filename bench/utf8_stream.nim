@@ -52,14 +52,6 @@ template checkUtf8Bytes(p: openArray[char], i: int): uint8 =
   checkSpecialCases(input, prev1) or
     checkMultibyteLengths(input, prev1, prev2, prev3)
 
-template checkBounded(p: openArray[char], n, i: int): uint8 =
-  var window: array[4, char]
-  for k in 0 .. 3:
-    template idx: untyped = i - k
-    if idx >= 0 and idx < n:
-      window[3 - k] = p[idx]
-  checkUtf8Bytes(window, 3)
-
 template isIncomplete(prev1, prev2, prev3: uint8): uint8 =
   mustBeContinuation(prev1, prev2, prev3)
 
