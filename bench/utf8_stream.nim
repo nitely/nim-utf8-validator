@@ -3,13 +3,16 @@
 # Build for speed with:
 #   nim c -d:danger --passC:"-march=native" ...
 
-const utf8Block = 61
+const utf8Block = 256
+const buffSize = 8 * 1024
 const lookBehind = 3
+
+static: doAssert buffSize <= int(high(uint16))
 
 type
   Utf8Validator* = object
-    buff: array[lookBehind + utf8Block, char]
-    pos: uint8
+    buff: array[lookBehind + buffSize, char]
+    pos: uint16
     error: uint8
 
 # Usage:
@@ -66,7 +69,7 @@ template isAscii(p: openArray[char], i: int): bool =
 when not defined(debug):
   {.push checks: off.}
 
-func validateUtf8(p: openArray[char], first: int): uint8 =
+func validateBlock(p: openArray[char], first: int): uint8 =
   var error = 0'u8
   let n = p.len
   var i = first
@@ -82,7 +85,7 @@ func validateUtf8(p: openArray[char], first: int): uint8 =
 
 func flush(v: var Utf8Validator) =
   let n = lookBehind + int(v.pos)
-  v.error = v.error or validateUtf8(toOpenArray(v.buff, 0, n - 1), lookBehind)
+  v.error = v.error or validateBlock(toOpenArray(v.buff, 0, n - 1), lookBehind)
   for i in 0 ..< lookBehind:
     v.buff[i] = v.buff[n - lookBehind + i]
   v.pos = 0
@@ -90,12 +93,20 @@ func flush(v: var Utf8Validator) =
 func push*(v: var Utf8Validator, c: char) {.inline.} =
   v.buff[lookBehind + int(v.pos)] = c
   inc v.pos
-  if v.pos == utf8Block:
+  if v.pos == buffSize:
     v.flush()
 
 func push*(v: var Utf8Validator, s: openArray[char]) =
-  for c in s:
-    v.push c
+  ## Same as pushing one byte at a time, a run at a time.
+  var i = 0
+  while i < s.len:
+    let n = min(buffSize - int(v.pos), s.len - i)
+    for k in 0 ..< n:
+      v.buff[lookBehind + int(v.pos) + k] = s[i + k]
+    v.pos += uint16(n)
+    if v.pos == buffSize:
+      v.flush()
+    i += n
 
 func isValid*(v: var Utf8Validator): bool =
   v.flush()
@@ -108,6 +119,12 @@ func isValid*(v: var Utf8Validator): bool =
 func reset*(v: var Utf8Validator) {.inline.} =
   ## Drop the stream and start over.
   v = Utf8Validator()
+
+func validateUtf8*(p: openArray[char]): bool =
+  ## Validate a whole input in one go, through the stream API.
+  var v = Utf8Validator()
+  v.push p
+  v.isValid()
 
 when not defined(debug):
   {.pop.}
