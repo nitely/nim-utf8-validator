@@ -29,38 +29,38 @@ template isContinuation(b: uint8): uint8 =
   uint8(b >= 0x80'u8) and uint8(b < 0xC0'u8)
 
 template mustBeContinuation(prev1, prev2, prev3: uint8): uint8 =
-  template isSecondByte: untyped = uint8(prev1 >= 0xC0'u8)
-  template isThirdByte: untyped = uint8(prev2 >= 0xE0'u8)
-  template isFourthByte: untyped = uint8(prev3 >= 0xF0'u8)
-  isSecondByte or isThirdByte or isFourthByte
+  uint8(prev1 >= 0xC0'u8) or uint8(prev2 >= 0xE0'u8) or uint8(prev3 >= 0xF0'u8)
 
-template checkMultibyteLengths(isCont, prev1, prev2, prev3: uint8): uint8 =
-  mustBeContinuation(prev1, prev2, prev3) xor isCont
+template checkMultibyteLengths(input, prev1, prev2, prev3: uint8): uint8 =
+  mustBeContinuation(prev1, prev2, prev3) xor isContinuation(input)
 
-template checkSpecialCases(input, prev1, isCont: uint8): uint8 =
-  template geA0: untyped = uint8(input >= 0xA0'u8)
-  template ge90: untyped = uint8(input >= 0x90'u8)
-  template overlong2: untyped = uint8((prev1 and 0xFE'u8) == 0xC0'u8)
-  template overlong3: untyped = uint8(prev1 == 0xE0'u8) and (geA0 xor 1'u8)
-  template surrogate: untyped = uint8(prev1 == 0xED'u8) and geA0
-  template overlong4: untyped = uint8(prev1 == 0xF0'u8) and (ge90 xor 1'u8)
-  template tooLarge: untyped = uint8(prev1 == 0xF4'u8) and ge90
-  template tooLargeN: untyped = uint8(prev1 >= 0xF5'u8)
-  isCont and (overlong2 or overlong3 or surrogate or overlong4 or tooLarge or tooLargeN)
+template checkSpecialCases(input, prev1: uint8): uint8 =
+  isContinuation(input) and (
+    uint8((prev1 and 0xFE'u8) == 0xC0'u8) or
+    uint8(prev1 == 0xE0'u8) and (uint8(input >= 0xA0'u8) xor 1'u8) or
+    uint8(prev1 == 0xED'u8) and uint8(input >= 0xA0'u8) or
+    uint8(prev1 == 0xF0'u8) and (uint8(input >= 0x90'u8) xor 1'u8) or
+    uint8(prev1 == 0xF4'u8) and uint8(input >= 0x90'u8) or
+    uint8(prev1 >= 0xF5'u8)
+  )
 
 template checkUtf8Bytes(p: openArray[char], i: int): uint8 =
-  template input: untyped = uint8(p[i])
-  template prev1: untyped = uint8(p[i - 1])
-  template prev2: untyped = uint8(p[i - 2])
-  template prev3: untyped = uint8(p[i - 3])
-  template isCont: untyped = isContinuation(input)
-  checkSpecialCases(input, prev1, isCont) or
-    checkMultibyteLengths(isCont, prev1, prev2, prev3)
+  template input: uint8 = uint8(p[i])
+  template prev1: uint8 = uint8(p[i - 1])
+  template prev2: uint8 = uint8(p[i - 2])
+  template prev3: uint8 = uint8(p[i - 3])
+  checkSpecialCases(input, prev1) or
+    checkMultibyteLengths(input, prev1, prev2, prev3)
+
+template checkBounded(p: openArray[char], n, i: int): uint8 =
+  var window: array[4, char]
+  for k in 0 .. 3:
+    template idx: untyped = i - k
+    if idx >= 0 and idx < n:
+      window[3 - k] = p[idx]
+  checkUtf8Bytes(window, 3)
 
 template isIncomplete(prev1, prev2, prev3: uint8): uint8 =
-  ## The check past the last byte of the stream. The absent byte is
-  ## not a continuation, so `checkUtf8Bytes` reduces to this; ie: it
-  ## is an error if the last character is still missing a byte.
   mustBeContinuation(prev1, prev2, prev3)
 
 template isAscii(p: openArray[char], i: int): bool =
@@ -93,14 +93,13 @@ func flush(v: var Utf8Validator) =
     v.buff[i] = v.buff[n - lookBehind + i]
   v.pos = 0
 
-func push*(v: var Utf8Validator, c: char) {.inline.} =
+func push*(v: var Utf8Validator, c: char) =
   v.buff[lookBehind + int(v.pos)] = c
   inc v.pos
   if v.pos == buffSize:
     v.flush()
 
 func push*(v: var Utf8Validator, s: openArray[char]) =
-  ## Same as pushing one byte at a time, a run at a time.
   var i = 0
   while i < s.len:
     let n = min(buffSize - int(v.pos), s.len - i)
@@ -118,10 +117,6 @@ func isValid*(v: var Utf8Validator): bool =
     uint8(v.buff[lookBehind - 2]),
     uint8(v.buff[lookBehind - 3]))
   (v.error or incomplete) == 0'u8
-
-func reset*(v: var Utf8Validator) {.inline.} =
-  ## Drop the stream and start over.
-  v = Utf8Validator()
 
 func validateUtf8*(p: openArray[char]): bool =
   ## Validate a whole input in one go, through the stream API.
