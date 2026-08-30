@@ -1,6 +1,6 @@
 # Fast unicode (UTF-8) validation
 
-TLDR: This article describes a very fast algorithm for UTF-8 unicode validation. It has two paths ascii and UTF-8 validation, both paths are autovectorized. It does not use simd.
+TLDR: This article describes a very fast algorithm for UTF-8 unicode validation. It has two paths, ascii and UTF-8, both paths are autovectorized.
 
 ## Introduction
 
@@ -8,9 +8,9 @@ This UTF8 validator is based on a branchless lookbehind algorithm which is autov
 
 The ASCII skip algorithm is an adaptation of the one in Lemire's [Performance trick : optimistic vs pessimistic checks](https://lemire.me/blog/2025/12/20/performance-trick-optimistic-vs-pessimistic-checks/) article.
 
-The proof takes the UTF-8 spec table and its classical branchy implementation, and derives the branchless lookbehind algorithm from them.
+The algorithm is derived from the UTF-8 specification table and the classical branchy implementation.
 
-A prettified version of the algorithm (with "named expressions") can be found in [its repository](https://github.com/nitely/nim-utf8-validator). It's implemented in [Nim](https://nim-lang.org/).
+A prettified version of the algorithm (with "named expressions") can be found in [its repository](https://github.com/nitely/nim-utf8-validator/blob/master/utf8_validator.nim). It's implemented in [Nim](https://nim-lang.org/).
 
 ## Benchmarks
 
@@ -71,60 +71,19 @@ Standard UTF-8 well-formedness table:
 | U+40000..U+FFFFF | `F1`..`F3` | `80`..`BF` | `80`..`BF` | `80`..`BF` |
 | U+100000..U+10FFFF | `F4` | `80`..`8F` | `80`..`BF` | `80`..`BF` |
 
-`branchy` algorithm implementation:
+The `branchy` algorithm implementation can be found [here](https://github.com/nitely/nim-utf8-validator/blob/8ce234ac41652f92f1e2b89a0d4cdd4db0e3ac23/bench/utf8_branchy.nim).
 
-```nim
-proc branchy(p: openArray[char]): bool =
-  let n = p.len
-  var i = 0
-  template rng(x: uint8, lo, hi: uint8): bool = x >= lo and x <= hi
-  while i < n:
-    let b = uint8(p[i])
-    if b <= 0x7F'u8: i += 1
-    elif rng(b, 0xC2, 0xDF):
-      if i+1 >= n or not rng(uint8(p[i+1]), 0x80, 0xBF): return false
-      i += 2
-    elif b == 0xE0'u8:
-      if i+2 >= n or not rng(uint8(p[i+1]), 0xA0, 0xBF) or
-                     not rng(uint8(p[i+2]), 0x80, 0xBF): return false
-      i += 3
-    elif rng(b, 0xE1, 0xEC) or b == 0xEE'u8 or b == 0xEF'u8:
-      if i+2 >= n or not rng(uint8(p[i+1]), 0x80, 0xBF) or
-                     not rng(uint8(p[i+2]), 0x80, 0xBF): return false
-      i += 3
-    elif b == 0xED'u8:
-      if i+2 >= n or not rng(uint8(p[i+1]), 0x80, 0x9F) or
-                     not rng(uint8(p[i+2]), 0x80, 0xBF): return false
-      i += 3
-    elif b == 0xF0'u8:
-      if i+3 >= n or not rng(uint8(p[i+1]), 0x90, 0xBF) or
-                     not rng(uint8(p[i+2]), 0x80, 0xBF) or
-                     not rng(uint8(p[i+3]), 0x80, 0xBF): return false
-      i += 4
-    elif rng(b, 0xF1, 0xF3):
-      if i+3 >= n or not rng(uint8(p[i+1]), 0x80, 0xBF) or
-                     not rng(uint8(p[i+2]), 0x80, 0xBF) or
-                     not rng(uint8(p[i+3]), 0x80, 0xBF): return false
-      i += 4
-    elif b == 0xF4'u8:
-      if i+3 >= n or not rng(uint8(p[i+1]), 0x80, 0x8F) or
-                     not rng(uint8(p[i+2]), 0x80, 0xBF) or
-                     not rng(uint8(p[i+3]), 0x80, 0xBF): return false
-      i += 4
-    else: return false
-  true
-```
-
-The table and `branchy` algorithm are assumed correct. What follows shows `validateUtf8` accepts the same strings, in two independent parts:
+The table and `branchy` algorithm are assumed correct. The equivalence can be checked in three parts:
 
 - **Length**: which bytes must be continuation bytes; continuation bytes missing or unrequired.
 - **Byte 2**: range limits after `E0`, `ED`, `F0`, `F4`; rejection of `C0`, `C1`, `F5..FF`.
+- **Bounds and truncation**.
 
 ---
 
 ### 2. Character boundaries
 
-The `branchy` algorithm carries the index of the next character. `validateUtf8` checks each position independently doing a three-byte lookbehind.
+This algorithm checks each position independently doing a three-byte lookbehind.
 
 ```nim
 template mustBeContinuation(prev1, prev2, prev3: uint8): uint8 =
@@ -137,9 +96,9 @@ template mustBeContinuation(prev1, prev2, prev3: uint8): uint8 =
 | `p[i-2] >= E0` | `p[i-2]` could lead a character of 3 bytes or more |
 | `p[i-3] >= F0` | `p[i-3]` could lead a character of 4 bytes |
 
-"Could": `C0`, `C1`, `F5..FF` pass these thresholds but never start a character. §3 rejects them.
+For example: `C0`, `C1`, `F5..FF` pass these thresholds but never start a character. §3 rejects them.
 
-Mutually exclusive on valid input. A position belongs to one character.
+These cases cannot overlap for valid UTF-8. A position belongs to one character.
 
 ```nim
 let isCont = uint8(uint8(p[i]) >= 0x80'u8) and uint8(uint8(p[i]) < 0xC0'u8)
@@ -150,14 +109,14 @@ template checkMultibyteLengths(isCont, prev1, prev2, prev3: uint8): uint8 =
   mustBeContinuation(prev1, prev2, prev3) xor isCont
 ```
 
-Non-zero when:
+The result is non-zero in either of these cases:
 
 1. a continuation is required and absent.
 2. a continuation is present and not required.
 
 Zero at every position reproduces the `branchy` branch boundaries: after a lead of length `L`, positions `+1 .. +L-1` are required continuations and `+L` is not, so `+L` starts the next character.
 
-Two of the tests hold at the same position only when a byte `>= C0` sits where an earlier lead already required a continuation. That byte is not a continuation, so the check at its own position has already failed.
+Two of the tests are true at the same position only when a byte `>= C0` sits where an earlier lead already required a continuation. That byte is not a continuation, so the check at its own position has already failed.
 
 `F0 C2 80`: at position 2 both `p[1] >= C0` and `p[0] >= E0` hold, but position 1 has already failed; ie: `F0` requires a continuation there and `C2` is not one.
 
@@ -192,7 +151,7 @@ template checkSpecialCases(input, prev1, isCont: uint8): uint8 =
 
 `(prev1 and 0xFE) == 0xC0` matches exactly `C0` and `C1`.
 
-The `isCont` guard loses nothing. For `prev1` in `C0`, `C1`, `F5..FF`:
+The `isCont` guard does not hide any invalid case. For `prev1` in `C0`, `C1`, `F5..FF`:
 
 | `p[i]` | Caught by |
 |---|---|
@@ -253,7 +212,7 @@ template checkUtf8Bytes(p: openArray[char], i: int): uint8 =
     checkMultibyteLengths(isCont, uint8(p[i - 1]), uint8(p[i - 2]), uint8(p[i - 3]))
 ```
 
-`isCont` as in §2. At positions `0 .. n-1` this detects:
+For each position `0 .. n-1`, the check catches:
 
 - a continuation byte where none is required.
 - a missing continuation byte.
@@ -263,7 +222,7 @@ template checkUtf8Bytes(p: openArray[char], i: int): uint8 =
 
 At `n`: a character left incomplete.
 
-Valid exactly when the error value is zero at every position `0 .. n-1` and at `n`.
+The byte sequence is valid *iff* the error value is zero at every position `0 .. n-1` and at `n`.
 
 Fixed four-byte window, no carried character index or loop state: the error values combine with bitwise `or` independent of evaluation order.
 
@@ -291,7 +250,7 @@ func validateUtf8*(p: openArray[char]): bool =
   error == 0'u8
 ```
 
-Coverage: loop 1 takes `0..2`, the only positions whose lookbehind reaches before the input, hence `checkBounded`; loop 2 takes whole blocks; loop 3 takes the remainder; `isIncomplete` takes `n`.
+The first loop covers `0..2`, the only positions whose lookbehind reaches before the input, hence `checkBounded`; loop 2 takes whole blocks; loop 3 takes the remainder; `isIncomplete` takes `n`.
 
 ```nim
 template isAscii(p: openArray[char], i: int): bool =
@@ -312,9 +271,9 @@ i+3      -> p[i   .. i+3]
 i+B-1    -> p[i+B-4 .. i+B-1]
 ```
 
-Union: `p[i-3 .. i+B-1]`, `B+3` bytes; ie: the range `isAscii` scans. Only the first three positions of a block read below `i`.
+The two loops cover `p[i-3 .. i+B-1]`, `B+3` bytes; ie: the range `isAscii` scans. Only the first three positions of a block read below `i`.
 
-All ASCII in that range: no continuation bytes, no lead bytes, so every skipped check would return zero. Skipping is safe.
+All ASCII in that range: no continuation bytes, no lead bytes, so every skipped check would return zero.
 
 The three-byte margin is required. With `utf8Block = 256` blocks start at 3, 259, 515; take:
 
@@ -331,17 +290,19 @@ For characters spanning block boundaries, all bytes relevant to a skipped check 
 
 ### 7. Result
 
-Under §1, `validateUtf8` accepts the same strings as `branchy`.
+Under §1, this [utf8_validator](https://github.com/nitely/nim-utf8-validator/blob/master/utf8_validator.nim) accepts the same strings as `branchy`.
 
-| `branchy` | `validateUtf8` |
+| `branchy` | `utf8_validator` |
 |---|---|
 | continuation-byte requirements, `i += L` | `mustBeContinuation` xor `isCont` (§2) |
 | byte-2 ranges; `C0`, `C1`, `F5..FF` | `checkSpecialCases` (§3) |
 | `i+L >= n` truncation | the check at `n` (§4) |
 
-Every position is checked (§6), and blocks are skipped only when every byte the skipped checks would read is ASCII.
+This checks every position (§6), and blocks are skipped only when every byte the skipped checks would read is ASCII.
 
 ## Notes
 
 - Both the ASCII path and the UTF8 path get autovectorized.
-- Why is the utf8 block size 256? I found that gets the highest performance in the benchmarks. Anything lower than CPU cache line size (64 bytes) reduces performance. Anything higher really depends on the text. I found 256 gets the highes performance in the ascii text without reducing performance in the rest of tests. Aside from the ascii bench, the rest performs more or less similarly with +64 size blocks.
+- Why is the utf8 block size 256? It seems like the best value for the benchmarks. But in general it is likely better to set it to 64 or 128; it will make the pure ascii check slower, but 256 bytes windows of pure ascii are likely much more rare than 64 bytes. Aside from the ascii benchmark, a block of +64 didn't make a drastic difference in my machine. For the record 64 halves the ascii bench performance for me. Anything lower than 64 will hurt perf, likely because of CPU cache line size.
+
+I hope you enjoyed this article and found it useful. Until next time.
