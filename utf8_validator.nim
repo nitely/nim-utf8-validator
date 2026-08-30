@@ -56,7 +56,8 @@ template isAscii(p: openArray[char], i: int): bool =
     res = res or uint8(p[i - 3 + j])
   res <= 0x7F'u8
 
-{.push checks: off.}
+when not defined(debug):
+  {.push checks: off.}
 func validateUtf8*(p: openArray[char]): bool =
   var error = 0'u8
   let n = p.len
@@ -74,4 +75,5 @@ func validateUtf8*(p: openArray[char]): bool =
     inc i
   error = error or isIncomplete(p, n)
   error == 0'u8
-{.pop.}
+when not defined(debug):
+  {.pop.}
