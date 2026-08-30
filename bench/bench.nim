@@ -10,6 +10,7 @@ import ../utf8_validator
 import ./utf8_branchy
 import ./utf8_dfa
 import ./utf8_proof
+import ./utf8_stream
 
 var sink {.volatile.} = 0'u64
 
@@ -20,6 +21,7 @@ const validators: seq[(string, Validator)] = @[
   ("branchy", Validator(proc (data: string): bool = utf8_branchy.validateUtf8(data))),
   ("dfa",     Validator(proc (data: string): bool = utf8_dfa.validateUtf8(data))),
   ("proof",     Validator(proc (data: string): bool = utf8_proof.validateUtf8(data))),
+  ("stream",    Validator(proc (data: string): bool = utf8_stream.validateUtf8(data))),
 ]
 
 proc measure(validator: Validator, data: string): (float, float) =
