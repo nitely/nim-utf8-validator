@@ -4,16 +4,19 @@
 #   nim c -d:danger --passC:"-march=native" ...
 
 const utf8Block = 256
-const buffSize = 8 * 1024
+const buffSize = 4 * 1024
 const lookBehind = 3
 
 static: doAssert buffSize <= int(high(uint16))
+static: doAssert buffSize mod utf8Block == 0
 
 type
   Utf8Validator* = object
     buff: array[lookBehind + buffSize, char]
     pos: uint16
     error: uint8
+
+proc `=copy`*(dst: var Utf8Validator, src: Utf8Validator) {.error.}
 
 # Usage:
 # var utf8: Utf8Validator
