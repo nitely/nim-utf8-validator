@@ -4,13 +4,13 @@ TLDR: This article describes a very fast algorithm for UTF-8 unicode validation.
 
 ## Introduction
 
-The UTF8 validator is based on a branchless lookbehind algorithm which is autovectorizable. It checks every byte position from a 4-byte window (current byte + 3-byte lookbehind), and it has an ascii check fast path that skips ascii text blocks.
+This UTF8 validator is based on a branchless lookbehind algorithm which is autovectorizable. It checks every byte position from a 4-byte window (current byte + 3-byte lookbehind), and it has an ascii check fast path that skips ascii text blocks.
 
 The ASCII skip algorithm is an adaptation of the one in Lemire's [Performance trick : optimistic vs pessimistic checks](https://lemire.me/blog/2025/12/20/performance-trick-optimistic-vs-pessimistic-checks/) article.
 
 The proof takes the UTF-8 spec table and its classical branchy implementation, and derives the branchless lookbehind algorithm from them.
 
-A prettified version of the algorithm (with "named expressions") can be found in its repository. It's implemented in [Nim](https://nim-lang.org/).
+A prettified version of the algorithm (with "named expressions") can be found in [its repository](https://github.com/nitely/nim-utf8-validator). It's implemented in [Nim](https://nim-lang.org/).
 
 ## Benchmarks
 
