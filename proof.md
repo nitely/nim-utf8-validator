@@ -1,58 +1,3 @@
-# Fast unicode (UTF-8) validation
-
-TLDR: This article describes a very fast algorithm for UTF-8 unicode validation. It has two paths, ascii and UTF-8, both paths are autovectorized.
-
-## Introduction
-
-This UTF8 validator is based on a branchless lookbehind algorithm which is autovectorizable. It checks every byte position from a 4-byte window (current byte + 3-byte lookbehind), and it has an ascii check fast path that skips ascii text blocks.
-
-The ASCII skip algorithm is an adaptation of the one in Lemire's [Performance trick : optimistic vs pessimistic checks](https://lemire.me/blog/2025/12/20/performance-trick-optimistic-vs-pessimistic-checks/) article.
-
-The algorithm is derived from the UTF-8 specification table and the classical branchy implementation.
-
-A prettified version of the algorithm (with "named expressions") can be found in [its repository](https://github.com/nitely/nim-utf8-validator/blob/master/utf8_validator.nim). It's implemented in [Nim](https://nim-lang.org/).
-
-## Benchmarks
-
-```text
-data/ascii.txt  --  0.57 MiB, 0.00% non-ascii
-  validator      verdict   best GB/s   median   best ms
-  -----------------------------------------------------
-  nitely           valid       82.91    81.09     0.007
-  branchy          valid        2.04     1.94     0.294
-  dfa              valid        0.57     0.57     1.049
-
-data/jp_random.txt  --  0.02 MiB, 98.36% non-ascii
-  validator      verdict   best GB/s   median   best ms
-  -----------------------------------------------------
-  nitely           valid        9.85     9.71     0.003
-  branchy          valid        1.97     1.94     0.013
-  dfa              valid        0.55     0.54     0.048
-
-data/hongkong.html  --  1.72 MiB, 8.37% non-ascii
-  validator      verdict   best GB/s   median   best ms
-  -----------------------------------------------------
-  nitely           valid       17.35    17.08     0.104
-  branchy          valid        1.88     1.79     0.962
-  dfa              valid        0.57     0.54     3.171
-
-data/twitter.json  --  0.60 MiB, 15.11% non-ascii
-  validator      verdict   best GB/s   median   best ms
-  -----------------------------------------------------
-  nitely           valid       21.12    20.11     0.030
-  branchy          valid        1.89     1.87     0.335
-  dfa              valid        0.57     0.57     1.107
-```
-
-Validators:
-- `nitely`: the validator explained in this article.
-- `branchy`: classical branchy validator derived from the UTF8 spec.
-- `dfa`: a [DFA based validator](https://bjoern.hoehrmann.de/utf-8/decoder/dfa/). 
-
-The algorithm is quite fast for ASCII only text, so the more ASCII in the text the faster it gets. The `jp_random` text contains almost pure UTF-8 sequences, and so it should be taken as the closest to base performance.
-
-Note the `branchy` algorithm is quite fast thanks to CPU branch prediction. In pathological cases (not included here) it can be slower than the DFA algorithm. It's also capable of bailing out sooner on invalid UTF-8, however these benchmarks contain valid UTF-8.
-
 ## Correctness proof
 
 ### 1. Assumption
@@ -299,10 +244,3 @@ Under §1, this [utf8_validator](https://github.com/nitely/nim-utf8-validator/bl
 | `i+L >= n` truncation | the check at `n` (§4) |
 
 This checks every position (§6), and blocks are skipped only when every byte the skipped checks would read is ASCII.
-
-## Notes
-
-- Both the ASCII path and the UTF8 path get autovectorized.
-- Why is the utf8 block size 256? It seems like the best value for the benchmarks. But in general it is likely better to set it to 64 or 128; it will make the pure ascii check slower, but 256 bytes windows of pure ascii are likely much more rare than 64 bytes. Aside from the ascii benchmark, a block of +64 didn't make a drastic difference in my machine. For the record 64 halves the ascii bench performance for me. Anything lower than 64 will hurt perf, likely because of CPU cache line size.
-
-I hope you enjoyed this article and found it useful. Until next time.
