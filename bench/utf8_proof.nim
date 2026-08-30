@@ -22,8 +22,12 @@ func validateUtf8*(p: openArray[char]): bool =
     )
 
   template checkUtf8Bytes(p: openArray[char], i: int): uint8 =
-    checkSpecialCases(uint8(p[i]), uint8(p[i - 1])) or
-      checkMultibyteLengths(uint8(p[i]), uint8(p[i - 1]), uint8(p[i - 2]), uint8(p[i - 3]))
+    template input: uint8 = uint8(p[i])
+    template prev1: uint8 = uint8(p[i - 1])
+    template prev2: uint8 = uint8(p[i - 2])
+    template prev3: uint8 = uint8(p[i - 3])
+    checkSpecialCases(input, prev1) or
+      checkMultibyteLengths(input, prev1, prev2, prev3)
 
   template checkBounded(p: openArray[char], n, i: int): uint8 =
     var window: array[4, char]
