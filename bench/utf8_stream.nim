@@ -88,8 +88,7 @@ func push*(v: var Utf8Validator, s: openArray[char]) =
   var i = 0
   while i < s.len:
     let n = min(buffSize - int(v.pos), s.len - i)
-    for k in 0 ..< n:
-      v.buff[lookBehind + int(v.pos) + k] = s[i + k]
+    copyMem(addr v.buff[lookBehind + int(v.pos)], addr s[i], n)
     v.pos += uint16(n)
     if v.pos == buffSize:
       v.flush()
