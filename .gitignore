@@ -3,3 +3,4 @@ nimblecache/
 htmldocs/
 bench/bench
 tests/test_validator
+tests/test_stream
