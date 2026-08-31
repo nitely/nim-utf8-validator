@@ -11,26 +11,28 @@ import std/[random, strutils]
 import ../utf8_validator as nitely
 import ../bench/utf8_branchy as branchy
 import ../bench/utf8_dfa as dfa
+import ../bench/utf8_dfa_ascii as dfa_ascii
 import ../bench/utf8_proof as proof
 
 var failures = 0
 var checked = 0
 
 proc check(s: openArray[char], tag: string) =
-  ## The three validators must return the same verdict.
+  ## Every validator must return the same verdict.
   let a = nitely.validateUtf8(s)
   let b = branchy.validateUtf8(s)
   let c = dfa.validateUtf8(s)
   let d = proof.validateUtf8(s)
+  let e = dfa_ascii.validateUtf8(s)
   inc checked
-  if a != b or a != c or a != d:
+  if a != b or a != c or a != d or a != e:
     inc failures
     if failures <= 20:
       var hex = ""
       for ch in s:
         hex.add toHex(uint8(ch), 2)
       echo "MISMATCH [", tag, "] nitely=", a, " branchy=", b, " dfa=", c,
-        " len=", s.len, " bytes=", hex
+        " proof=", d, " dfa_ascii=", e, " len=", s.len, " bytes=", hex
 
 proc expect(s: string, want: bool, tag: string) =
   ## As `check`, and the verdict must be `want`.
