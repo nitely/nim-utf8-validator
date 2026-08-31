@@ -1,6 +1,6 @@
 # UTF8-validator
 
-A very fast UTF-8 validator in pure Nim.
+Experiments on UTF-8 validators in pure Nim.
 
 ## Bench
 
