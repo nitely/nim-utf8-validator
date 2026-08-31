@@ -18,7 +18,7 @@ var sink {.volatile.} = 0'u64
 type Validator = proc (data: string): bool {.nimcall.}
 
 const validators: seq[(string, Validator)] = @[
-  ("lookbehind", Validator(proc (data: string): bool = utf8_validator.validateUtf8(data))),
+  ("branchless", Validator(proc (data: string): bool = utf8_validator.validateUtf8(data))),
   ("branchy", Validator(proc (data: string): bool = utf8_branchy.validateUtf8(data))),
   ("dfa",     Validator(proc (data: string): bool = utf8_dfa.validateUtf8(data))),
   ("dfa_ascii",    Validator(proc (data: string): bool = utf8_dfa_ascii.validateUtf8(data))),
