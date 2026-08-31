@@ -7,6 +7,7 @@
 
 import std/[monotimes, times, os, strformat, strutils, algorithm]
 import ../utf8_validator
+import ../utf8_validator2
 import ./utf8_branchy
 import ./utf8_dfa
 import ./utf8_dfa_ascii
@@ -18,7 +19,8 @@ var sink {.volatile.} = 0'u64
 type Validator = proc (data: string): bool {.nimcall.}
 
 const validators: seq[(string, Validator)] = @[
-  ("branchless", Validator(proc (data: string): bool = utf8_validator.validateUtf8(data))),
+  ("nitely", Validator(proc (data: string): bool = utf8_validator.validateUtf8(data))),
+  ("nitely2", Validator(proc (data: string): bool = utf8_validator2.validateUtf8(data))),
   ("branchy", Validator(proc (data: string): bool = utf8_branchy.validateUtf8(data))),
   ("dfa",     Validator(proc (data: string): bool = utf8_dfa.validateUtf8(data))),
   ("dfa_ascii",    Validator(proc (data: string): bool = utf8_dfa_ascii.validateUtf8(data))),
