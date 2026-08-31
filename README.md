@@ -43,8 +43,6 @@ data/twitter.json  --  0.60 MiB, 15.11% non-ascii
   dfa              valid        0.57     0.57     1.107
 ```
 
-Note the autovectorized branchless validator is slow for short text. It's only fast for +256 bytes.
-
 ## License
 
 MIT
